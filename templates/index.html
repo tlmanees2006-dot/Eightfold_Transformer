@@ -1,0 +1,370 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Eightfold Candidate Profile Transformer</title>
+<style>
+  :root {
+    --navy: #0b3d66; --navy-deep: #082b49; --slate: #f4f7fa; --ink: #1a2733;
+    --muted: #6b7c8c; --line: #d8e2ea; --good: #1f8a5f; --warn: #b3500e; --bad: #c0392b;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; background: var(--slate); color: var(--ink); }
+  header { background: linear-gradient(135deg, var(--navy), var(--navy-deep)); color: white; padding: 20px 28px; }
+  header h1 { margin: 0; font-size: 19px; font-weight: 700; }
+  header p { margin: 4px 0 0; font-size: 12.5px; color: #cfe0ee; }
+
+  .layout { display: flex; max-width: 1360px; margin: 0 auto; gap: 20px; padding: 20px; align-items: flex-start; }
+  .sidebar { width: 340px; flex-shrink: 0; position: sticky; top: 20px; }
+  .main { flex: 1; min-width: 0; }
+
+  .card { background: white; border: 1px solid var(--line); border-radius: 8px; padding: 14px; margin-bottom: 14px; }
+  .card h2 { font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: var(--navy); margin: 0 0 10px; }
+  .card h3 { font-size: 11px; color: var(--muted); margin: 10px 0 4px; }
+
+  select, button, input[type=text] {
+    font-family: inherit; font-size: 12.5px; padding: 7px 9px;
+    border-radius: 6px; border: 1px solid var(--line); background: white;
+  }
+  select, input[type=text] { width: 100%; }
+  .radio-row { display: flex; gap: 14px; font-size: 12.5px; margin-bottom: 8px; }
+  .radio-row label { display: flex; align-items: center; gap: 5px; cursor: pointer; }
+
+  button.primary { background: var(--navy); color: white; border: none; cursor: pointer; width: 100%; padding: 9px; font-weight: 600; margin-top: 6px; }
+  button.primary:hover { background: var(--navy-deep); }
+  button.primary:disabled { opacity: 0.5; cursor: default; }
+  button.secondary { background: white; color: var(--navy); border: 1px solid var(--navy); cursor: pointer; width: 100%; padding: 7px; font-size: 12px; margin-top: 4px; }
+  button.small { font-size: 11px; padding: 3px 8px; border: 1px solid var(--line); background: white; cursor: pointer; border-radius: 5px; }
+
+  .upload-zone { border: 1.5px dashed var(--line); border-radius: 6px; padding: 14px; text-align: center; font-size: 12px; color: var(--muted); }
+  .file-chip { display: inline-block; font-size: 10.5px; background: #eef4f9; color: var(--navy); padding: 2px 8px; border-radius: 10px; margin: 2px 3px 0 0; }
+  .file-chip.rejected { background: #fdecea; color: var(--bad); }
+
+  .field-row { display: grid; grid-template-columns: 1fr 1fr 70px 70px 24px; gap: 4px; align-items: center; margin-bottom: 5px; }
+  .field-row select, .field-row input { padding: 5px 6px; font-size: 11px; }
+  .field-row .rm { color: var(--bad); cursor: pointer; text-align: center; font-weight: 700; }
+  .toggle-row { display: flex; align-items: center; justify-content: space-between; font-size: 12px; padding: 4px 0; }
+  .toggle-row input { width: auto; }
+
+  textarea#configRaw { width: 100%; height: 160px; font-family: 'Consolas', monospace; font-size: 11px; border: 1px solid var(--line); border-radius: 6px; padding: 8px; resize: vertical; display:none; }
+
+  .log-line { font-size: 11.5px; padding: 2px 0; font-family: 'Consolas', monospace; }
+  .log-line.parsed { color: var(--good); } .log-line.skipped { color: var(--bad); }
+
+  .summary-row { display: flex; gap: 10px; margin-bottom: 14px; flex-wrap: wrap; }
+  .stat { background: white; border: 1px solid var(--line); border-radius: 8px; padding: 10px 14px; flex: 1; min-width: 130px; }
+  .stat .num { font-size: 20px; font-weight: 700; color: var(--navy); }
+  .stat .num.bad { color: var(--bad); }
+  .stat .label { font-size: 10.5px; color: var(--muted); text-transform: uppercase; }
+
+  .candidate { background: white; border: 1px solid var(--line); border-radius: 8px; margin-bottom: 10px; overflow: hidden; }
+  .candidate-head { display: flex; align-items: center; justify-content: space-between; padding: 11px 14px; cursor: pointer; }
+  .candidate-head:hover { background: #fafcfe; }
+  .candidate-name { font-weight: 700; font-size: 13.5px; }
+  .candidate-sub { font-size: 11.5px; color: var(--muted); margin-top: 2px; }
+  .conf-pill { font-size: 10.5px; font-weight: 700; padding: 3px 8px; border-radius: 12px; color: white; }
+  .conf-high { background: var(--good); } .conf-mid { background: var(--warn); } .conf-low { background: var(--bad); }
+  .flag { display: inline-block; font-size: 9.5px; background: #fdecea; color: var(--bad); padding: 2px 6px; border-radius: 10px; margin-right: 4px; margin-top: 4px; }
+  .candidate-body { display: none; padding: 0 14px 14px; border-top: 1px solid var(--line); }
+  .candidate-body.open { display: block; }
+  pre.json-view { background: #0b3d66; color: #d7eaff; font-size: 11px; padding: 10px; border-radius: 6px; overflow-x: auto; margin-top: 8px; max-height: 320px; }
+  .explain-btn { font-size: 10.5px; background: none; border: 1px solid var(--navy); color: var(--navy); padding: 4px 9px; border-radius: 12px; cursor: pointer; margin-top: 8px; }
+  .prov-row { font-size: 11.5px; padding: 3px 0; border-bottom: 1px dashed var(--line); }
+  .prov-field { font-weight: 600; color: var(--navy); display: inline-block; width: 120px; }
+  .empty-state { color: var(--muted); font-size: 12.5px; padding: 26px; text-align: center; }
+  .note { font-size: 10.5px; color: var(--muted); margin-top: 6px; line-height: 1.4; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Eightfold Candidate Profile Transformer</h1>
+  <p>Detect &rarr; Extract &rarr; Normalize &rarr; Block &rarr; Match &rarr; Merge/Confidence &rarr; Project &rarr; Validate</p>
+</header>
+
+<div class="layout">
+  <div class="sidebar">
+
+    <div class="card">
+      <h2>1. Input Sources</h2>
+      <div class="radio-row">
+        <label><input type="radio" name="sourceMode" value="sample" checked> Use sample inputs</label>
+        <label><input type="radio" name="sourceMode" value="uploaded"> Upload my own files</label>
+      </div>
+      <div id="uploadSection" style="display:none;">
+        <div class="upload-zone">
+          <input type="file" id="fileInput" multiple accept=".csv,.json,.txt,.pdf,.docx" style="font-size:11px;">
+          <div class="note">CSV, JSON, TXT, PDF, DOCX accepted &mdash; mix any combination (e.g. 1 CSV + 2 resumes + 1 notes.txt).</div>
+        </div>
+        <button class="secondary" id="uploadBtn">Upload selected files</button>
+        <div id="uploadResult" style="margin-top:8px;"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>2. Output Config</h2>
+      <select id="configPreset">
+        <option value="default">Default schema (all fields)</option>
+        <option value="custom">Example: subset + rename</option>
+        <option value="builder" selected>Build my own config</option>
+        <option value="raw">Edit raw JSON</option>
+      </select>
+
+      <div id="builderSection">
+        <h3>Fields (subset selection + rename/remap via "from")</h3>
+        <div id="fieldRows"></div>
+        <button class="small" id="addFieldBtn">+ Add field</button>
+
+        <h3>Output toggles</h3>
+        <div class="toggle-row"><span>Include confidence</span><input type="checkbox" id="toggleConfidence" checked></div>
+        <div class="toggle-row"><span>Include provenance</span><input type="checkbox" id="toggleProvenance" checked></div>
+
+        <h3>Missing-value policy</h3>
+        <select id="onMissingSelect">
+          <option value="null">null &mdash; include field as null</option>
+          <option value="omit">omit &mdash; drop the field entirely</option>
+          <option value="error">error &mdash; flag as validation error</option>
+        </select>
+        <div class="note">Note: a field marked "required" always produces an error if missing, regardless of this policy.</div>
+      </div>
+
+      <textarea id="configRaw"></textarea>
+      <button class="primary" id="runBtn">Run pipeline</button>
+    </div>
+
+    <div class="card">
+      <h2>Source Log</h2>
+      <div id="sourceLog"><span class="empty-state">Run the pipeline to see scanned sources.</span></div>
+    </div>
+  </div>
+
+  <div class="main">
+    <div class="summary-row" id="summaryRow" style="display:none;">
+      <div class="stat"><div class="num" id="statCount">-</div><div class="label">Candidates Resolved</div></div>
+      <div class="stat"><div class="num" id="statAvg">-</div><div class="label">Avg. Confidence</div></div>
+      <div class="stat"><div class="num bad" id="statInvalid">-</div><div class="label">Invalid (failed validation)</div></div>
+      <div class="stat"><div class="num" id="statNoId">-</div><div class="label">No Stable Identifier</div></div>
+    </div>
+    <div id="candidateList">
+      <div class="empty-state">Choose input sources and an output config on the left, then click "Run pipeline".</div>
+    </div>
+  </div>
+</div>
+
+<script>
+const DEFAULT_CONFIG = {
+  fields: [
+    { path: "candidate_id", from: "candidate_id", type: "string", required: true },
+    { path: "full_name", from: "full_name", type: "string", required: true },
+    { path: "emails", from: "emails", type: "string[]" },
+    { path: "phones", from: "phones", type: "string[]", normalize: "E164" },
+    { path: "location", from: "location", type: "object" },
+    { path: "links", from: "links", type: "object" },
+    { path: "headline", from: "headline", type: "string" },
+    { path: "years_experience", from: "years_experience", type: "number" },
+    { path: "skills", from: "skills[].name", type: "string[]" },
+    { path: "experience", from: "experience", type: "array" },
+    { path: "education", from: "education", type: "array" }
+  ],
+  include_confidence: true, include_provenance: true, on_missing: "null"
+};
+
+const CUSTOM_CONFIG = {
+  fields: [
+    { path: "name", from: "full_name", type: "string", required: true },
+    { path: "primary_email", from: "emails[0]", type: "string", required: true },
+    { path: "phone", from: "phones[0]", type: "string", normalize: "E164" },
+    { path: "top_skills", from: "skills[].name", type: "string[]" }
+  ],
+  include_confidence: false, include_provenance: false, on_missing: "omit"
+};
+
+const NORMALIZE_OPTIONS = ["", "E164", "canonical", "string[]"];
+const TYPE_OPTIONS = ["string", "string[]", "number", "object", "array"];
+
+let builderFields = JSON.parse(JSON.stringify(DEFAULT_CONFIG.fields));
+
+function renderFieldRows() {
+  const container = document.getElementById('fieldRows');
+  container.innerHTML = '<div class="field-row" style="font-weight:600;font-size:10px;color:var(--muted);"><div>Output path</div><div>From (canonical path)</div><div>Type</div><div>Normalize</div><div></div></div>';
+  builderFields.forEach((f, i) => {
+    const row = document.createElement('div');
+    row.className = 'field-row';
+    row.innerHTML = `
+      <input type="text" value="${f.path}" onchange="updateField(${i}, 'path', this.value)">
+      <input type="text" value="${f.from || ''}" onchange="updateField(${i}, 'from', this.value)">
+      <select onchange="updateField(${i}, 'type', this.value)">${TYPE_OPTIONS.map(t => `<option value="${t}" ${f.type===t?'selected':''}>${t}</option>`).join('')}</select>
+      <select onchange="updateField(${i}, 'normalize', this.value)">${NORMALIZE_OPTIONS.map(n => `<option value="${n}" ${(f.normalize||'')===n?'selected':''}>${n||'none'}</option>`).join('')}</select>
+      <span class="rm" onclick="removeField(${i})">&times;</span>
+    `;
+    container.appendChild(row);
+    const reqLabel = document.createElement('label');
+    reqLabel.style.cssText = 'font-size:10px;color:var(--muted);display:block;margin:-3px 0 4px 2px;';
+    reqLabel.innerHTML = `<input type="checkbox" ${f.required?'checked':''} onchange="updateField(${i},'required',this.checked)" style="width:auto;vertical-align:middle;"> required`;
+    container.appendChild(reqLabel);
+  });
+}
+function updateField(i, key, val) {
+  if (key === 'normalize' && val === '') { delete builderFields[i].normalize; }
+  else { builderFields[i][key] = val; }
+}
+function removeField(i) { builderFields.splice(i, 1); renderFieldRows(); }
+document.getElementById('addFieldBtn').addEventListener('click', () => {
+  builderFields.push({ path: "new_field", from: "full_name", type: "string" });
+  renderFieldRows();
+});
+renderFieldRows();
+
+function buildConfigFromBuilder() {
+  return {
+    fields: builderFields,
+    include_confidence: document.getElementById('toggleConfidence').checked,
+    include_provenance: document.getElementById('toggleProvenance').checked,
+    on_missing: document.getElementById('onMissingSelect').value
+  };
+}
+
+const configRaw = document.getElementById('configRaw');
+const presetSelect = document.getElementById('configPreset');
+const builderSection = document.getElementById('builderSection');
+
+presetSelect.addEventListener('change', () => {
+  if (presetSelect.value === 'raw') {
+    builderSection.style.display = 'none';
+    configRaw.style.display = 'block';
+    configRaw.value = JSON.stringify(buildConfigFromBuilder(), null, 2);
+  } else {
+    configRaw.style.display = 'none';
+    builderSection.style.display = 'block';
+    if (presetSelect.value === 'default') { builderFields = JSON.parse(JSON.stringify(DEFAULT_CONFIG.fields)); }
+    if (presetSelect.value === 'custom') { builderFields = JSON.parse(JSON.stringify(CUSTOM_CONFIG.fields)); }
+    renderFieldRows();
+  }
+});
+
+// --- Source mode / upload ---
+document.querySelectorAll('input[name=sourceMode]').forEach(r => {
+  r.addEventListener('change', () => {
+    document.getElementById('uploadSection').style.display =
+      document.querySelector('input[name=sourceMode]:checked').value === 'uploaded' ? 'block' : 'none';
+  });
+});
+
+document.getElementById('uploadBtn').addEventListener('click', async () => {
+  const input = document.getElementById('fileInput');
+  if (!input.files.length) { alert('Choose at least one file first.'); return; }
+  const formData = new FormData();
+  for (const f of input.files) formData.append('files', f);
+  const res = await fetch('/api/upload', { method: 'POST', body: formData });
+  const data = await res.json();
+  const el = document.getElementById('uploadResult');
+  el.innerHTML =
+    data.accepted.map(n => `<span class="file-chip">${n}</span>`).join('') +
+    data.rejected.map(n => `<span class="file-chip rejected">${n} (unsupported)</span>`).join('');
+});
+
+function getSourceMode() {
+  return document.querySelector('input[name=sourceMode]:checked').value;
+}
+
+// --- Run pipeline ---
+async function runPipeline() {
+  const runBtn = document.getElementById('runBtn');
+  runBtn.disabled = true; runBtn.textContent = 'Running...';
+
+  let config;
+  if (presetSelect.value === 'raw') {
+    try { config = JSON.parse(configRaw.value); }
+    catch (e) { alert('Config JSON is invalid: ' + e.message); runBtn.disabled = false; runBtn.textContent = 'Run pipeline'; return; }
+  } else {
+    config = buildConfigFromBuilder();
+  }
+
+  const res = await fetch('/api/run', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ config, source_mode: getSourceMode() })
+  });
+  const data = await res.json();
+
+  if (data.error) {
+    document.getElementById('candidateList').innerHTML = `<div class="empty-state" style="color:var(--bad);">${data.error}</div>`;
+    runBtn.disabled = false; runBtn.textContent = 'Run pipeline';
+    return;
+  }
+
+  renderSourceLog(data.source_log);
+  renderCandidates(data.profiles, data.candidate_count);
+  runBtn.disabled = false; runBtn.textContent = 'Run pipeline';
+}
+
+function renderSourceLog(log) {
+  const el = document.getElementById('sourceLog');
+  el.innerHTML = log.map(l => {
+    const cls = l.status === 'parsed' ? 'parsed' : 'skipped';
+    const detail = l.status === 'parsed' ? `${l.type}, ${l.records_found} record(s)` : (l.reason || l.status);
+    return `<div class="log-line ${cls}">${l.status === 'parsed' ? '✓' : '✕'} ${l.file.split(/[\\\/]/).pop()} — ${detail}</div>`;
+  }).join('') || '<span class="empty-state">No source files found.</span>';
+}
+
+function renderCandidates(profiles, count) {
+  document.getElementById('summaryRow').style.display = 'flex';
+  document.getElementById('statCount').textContent = count;
+
+  const confValues = profiles.map(p => p.output.confidence ? Object.values(p.output.confidence).filter(v => v != null) : []).flat();
+  const avg = confValues.length ? (confValues.reduce((a,b)=>a+b,0)/confValues.length) : 0;
+  document.getElementById('statAvg').textContent = avg.toFixed(2);
+
+  document.getElementById('statInvalid').textContent = profiles.filter(p => !p.valid).length;
+  document.getElementById('statNoId').textContent = profiles.filter(p =>
+    (p.output.data_quality_flags || []).includes('no_stable_identifier')).length;
+
+  const list = document.getElementById('candidateList');
+  if (!profiles.length) { list.innerHTML = '<div class="empty-state">No candidates resolved.</div>'; return; }
+
+  list.innerHTML = profiles.map((p, idx) => {
+    const out = p.output;
+    const name = out.full_name || out.name || '(no name)';
+    const email = (out.emails && out.emails[0]) || out.primary_email || '—';
+    const flags = out.data_quality_flags || [];
+    const validBadge = p.valid ? '<span class="conf-pill conf-high">VALID</span>' : `<span class="conf-pill conf-low">INVALID</span>`;
+    return `
+      <div class="candidate">
+        <div class="candidate-head" onclick="toggleCard(${idx})">
+          <div>
+            <div class="candidate-name">${name}</div>
+            <div class="candidate-sub">${email}</div>
+            ${flags.map(f => `<span class="flag">${f}</span>`).join('')}
+          </div>
+          <div>${validBadge}</div>
+        </div>
+        <div class="candidate-body" id="body-${idx}">
+          ${!p.valid ? `<div style="color:var(--bad);font-size:12px;margin-top:8px;">${p.errors.join('<br>')}</div>` : ''}
+          <button class="explain-btn" onclick="explainCandidate('${p.candidate_id}', ${idx})">Explain this profile</button>
+          <div id="explain-${idx}"></div>
+          <pre class="json-view">${JSON.stringify(out, null, 2)}</pre>
+        </div>
+      </div>`;
+  }).join('');
+}
+
+function toggleCard(idx) { document.getElementById(`body-${idx}`).classList.toggle('open'); }
+
+async function explainCandidate(candidateId, idx) {
+  const res = await fetch(`/api/explain/${candidateId}?source_mode=${getSourceMode()}`);
+  const data = await res.json();
+  const el = document.getElementById(`explain-${idx}`);
+  if (data.error) { el.innerHTML = '<div style="color:var(--bad);font-size:12px;">Not found</div>'; return; }
+  el.innerHTML = `
+    <div style="margin-top:10px; padding:10px; background:#f4f7fa; border-radius:6px;">
+      <div style="font-size:12px; margin-bottom:6px;">
+        <b>Match tier:</b> ${data._match_tier} &nbsp; <b>Match confidence:</b> ${data._match_confidence} &nbsp;
+        <b>Sources:</b> ${data._contributing_sources.join(', ')}
+      </div>
+      ${data.provenance.map(p => `<div class="prov-row"><span class="prov-field">${p.field}</span> &larr; ${p.source} (${p.method}, conf=${p.confidence})</div>`).join('')}
+    </div>`;
+}
+
+document.getElementById('runBtn').addEventListener('click', runPipeline);
+</script>
+</body>
+</html>
